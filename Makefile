@@ -8,13 +8,18 @@ all: test build
 
 # perhaps add GOAMD64=v3 to architecture
 build:
-	go build -ldflags='-s -w' -o dist/${BINARYNAME} ./cmd/${ENTRYPOINT_NAME}.go
+	go build -ldflags='-s -w' -o dist/${BINARY_NAME} ./cmd/${ENTRYPOINT_NAME}.go
 
-test:
+tests:
 	go test ./...
 
 bench:
 	go test ./... -bench=. -benchtime 3s -run=^\# -cpu=1,20
+
+echo:
+	echo """hello\
+	my vr\
+	"""
 
 run: build
 	./dist/${BINARY_NAME}
@@ -23,7 +28,7 @@ dev:
 	go run parsemake.go
 
 clean:
-	rm -f dist/${BINARY_NAME}
+	rm -f dist/*
 	go mod tidy
 	go clean
 
@@ -32,4 +37,3 @@ vet:
 
 lint:
 	golangci-lint run --enable-all
-

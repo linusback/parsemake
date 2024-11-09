@@ -1,145 +1,307 @@
 package parsemake
 
 import (
-	"fmt"
-	"github.com/mrtazz/checkmake/parser"
-	"log/slog"
+	"bufio"
+	"bytes"
+	"io"
 	"os"
 	"testing"
 )
 
-const (
-	checkMakefile = "./testdata/CheckmakeMakefile"
-	makefile      = "./Makefile"
-)
-
-var testFiles = [...]string{
-	checkMakefile,
-	makefile,
-}
-
-var benchmarks = []benchmark{
-	newBenchmark("standard", makefile),
-	newBenchmark("large", checkMakefile),
-}
-
-func Benchmark_Parse(b *testing.B) {
-	toRun := getParseBenchmarks(Parse)
-	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
-	}
-}
-
-func Benchmark_Checkmake_Parse(b *testing.B) {
-	toRun := getParseBenchmarks(parser.Parse)
+func Benchmark_Read_Scanner(b *testing.B) {
+	toRun := createParserBenchmarks(scannerBenchmark)
 	b.ResetTimer()
 	for _, bench := range toRun {
 		b.Run(bench.name, bench.f)
 	}
 }
 
-type benchmark struct {
-	name     string
-	fileName string
-	byteSize int64
-	f        func(*testing.B)
+func Benchmark_Read_Simple(b *testing.B) {
+	toRun := createParserBenchmarks(simpleBenchmark)
+	b.ResetTimer()
+	for _, bench := range toRun {
+		b.Run(bench.name, bench.f)
+	}
 }
 
-func newBenchmark(name, filename string) benchmark {
-	return benchmark{name, filename, getByteSize(filename), nil}
+func Benchmark_Read_Custom(b *testing.B) {
+	toRun := createParserBenchmarks(customBenchmark)
+	b.ResetTimer()
+	for _, bench := range toRun {
+		b.Run(bench.name, bench.f)
+	}
 }
 
-func getParseBenchmarks[T any](parse func(string) (T, error)) (b []benchmark) {
+func Benchmark_Read_Include_Scanner(b *testing.B) {
+	toRun := createParserBenchmarks(scannerBenchmarkInclude)
+	b.ResetTimer()
+	for _, bench := range toRun {
+		b.Run(bench.name, bench.f)
+	}
+}
+
+func Benchmark_Read_Include_Simple(b *testing.B) {
+	toRun := createParserBenchmarks(simpleBenchmarkInclude)
+	b.ResetTimer()
+	for _, bench := range toRun {
+		b.Run(bench.name, bench.f)
+	}
+}
+
+func Benchmark_Read_Include_Custom(b *testing.B) {
+	toRun := createParserBenchmarks(customBenchmarkInclude)
+	b.ResetTimer()
+	for _, bench := range toRun {
+		b.Run(bench.name, bench.f)
+	}
+}
+
+func createParserBenchmarks(getBench func(string, int64) func(*testing.B)) (b []benchmark) {
 	b = make([]benchmark, len(benchmarks))
 	for i, bench := range benchmarks {
 		b[i] = bench // copies values
-		b[i].f = getBenchmarks(bench.fileName, bench.byteSize, parse)
+		b[i].f = getBench(bench.fileName, bench.byteSize)
 	}
 	return b
 }
 
-func getBenchmarks[T any](fileName string, byteSize int64, parse func(string) (T, error)) func(*testing.B) {
+func scannerBenchmark(fileName string, byteSize int64) func(*testing.B) {
+	var (
+		r       = new(bytes.Reader)
+		scanner = new(bufio.Scanner)
+		err2    error
+		buff    []byte
+	)
+	buff, err2 = readFile(fileName)
+	if err2 != nil {
+		panic(err2)
+	}
+	r.Reset(buff)
+
 	return func(b *testing.B) {
-		var err error
 		b.ReportAllocs()
 		b.SetBytes(byteSize)
 		for i := 0; i < b.N; i++ {
-			_, err = parse(fileName)
-			if err != nil {
-				b.Error(err)
-			}
+			r.Reset(buff)
+			scanner = bufio.NewScanner(r)
+			readWithScanner(scanner)
 		}
 	}
 }
 
-// testing
-
-// TODO write equality comparisons for makefile and underlying types
-func Test_Checkmake_Parse(t *testing.T) {
-	m, err := getCheckMake(checkMakefile)
-	if err != nil {
-		t.Error(err)
-	}
-
-	fmt.Println("")
-	for _, v := range m.Variables {
-		fmt.Printf("variable: %#v\n", v)
-	}
-
-	fmt.Println("rules: ")
-	for _, r := range m.Rules {
-		fmt.Printf("rules: %#v\n", r)
-	}
-}
-
-// TODO write equality comparisons for makefile and underlying types
-func Test_Parse(t *testing.T) {
-	m, err := getMake(checkMakefile)
-	if err != nil {
-		t.Error(err)
-	}
-
-	fmt.Println("")
-	for _, v := range m.Variables {
-		fmt.Printf("variable: %#v\n", v)
-	}
-
-	fmt.Println("rules: ")
-	for _, r := range m.Rules {
-		fmt.Printf("rules: %#v\n", r)
-	}
-}
-
-func getCheckMake(filename string) (f parser.Makefile, err error) {
-	f, err = parser.Parse(filename)
-	if err != nil {
-		return parser.Makefile{}, err
-	}
-	return f, nil
-}
-
-func getMake(filename string) (f *Makefile, err error) {
-	f, err = ParseLog(filename, slog.LevelInfo)
-	if err != nil {
-		return nil, err
-	}
-	return f, nil
-}
-
-func getByteSize(fileName string) int64 {
+func simpleBenchmark(fileName string, byteSize int64) func(*testing.B) {
 	var (
-		file     *os.File
-		fileInfo os.FileInfo
-		err      error
+		err2 error
+		buff []byte
 	)
-	file, err = os.Open(fileName)
+	buff, err2 = readFile(fileName)
+	if err2 != nil {
+		panic(err2)
+	}
+
+	return func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(byteSize)
+		for i := 0; i < b.N; i++ {
+			readSimple(buff)
+		}
+	}
+}
+
+func scannerBenchmarkInclude(fileName string, byteSize int64) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(byteSize)
+		for i := 0; i < b.N; i++ {
+			file, err := os.Open(fileName)
+			if err != nil {
+				b.Error(err)
+			}
+			scanner := bufio.NewScanner(file)
+			readWithScanner(scanner)
+			file.Close()
+		}
+	}
+}
+
+func simpleBenchmarkInclude(fileName string, byteSize int64) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(byteSize)
+		for i := 0; i < b.N; i++ {
+			buff, err := os.ReadFile(fileName)
+			if err != nil {
+				b.Error(err)
+			}
+			readSimple(buff)
+		}
+	}
+}
+
+func customBenchmark(fileName string, byteSize int64) func(*testing.B) {
+	var fileInfo os.FileInfo
+
+	file, err := os.Open(fileName)
 	if err != nil {
 		panic(err)
 	}
-	defer file.Close()
 	fileInfo, err = file.Stat()
 	if err != nil {
 		panic(err)
 	}
-	return fileInfo.Size()
+	buff := make([]byte, fileInfo.Size())
+	_, err = io.ReadFull(file, buff)
+	if err != nil {
+		file.Close()
+		panic(err)
+	}
+	file.Close()
+	return func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(byteSize)
+		for i := 0; i < b.N; i++ {
+			readSimple(buff)
+		}
+	}
+}
+
+func customBenchmarkInclude(fileName string, byteSize int64) func(*testing.B) {
+	return func(b *testing.B) {
+		var (
+			n        int
+			err      error
+			file     *os.File
+			buff     []byte
+			fileInfo os.FileInfo
+		)
+		b.ReportAllocs()
+		b.SetBytes(byteSize)
+		for i := 0; i < b.N; i++ {
+			file, err = os.Open(fileName)
+			if err != nil {
+				b.Error(err)
+			}
+			fileInfo, err = file.Stat()
+			if err != nil {
+				b.Error(err)
+			}
+			buff = make([]byte, fileInfo.Size())
+			n, err = io.ReadFull(file, buff)
+			if err != nil {
+				file.Close()
+				b.Error(err)
+			}
+			if n != len(buff) {
+				b.Errorf("values of n and len(buff) are different %d != %d", n, buff)
+			}
+			file.Close()
+			readSimple(buff)
+		}
+	}
+}
+
+func Test_Parser_New(t *testing.T) {
+	var (
+		b        []byte
+		err      error
+		rows     int
+		n        int
+		fileInfo os.FileInfo
+	)
+	b, err = readFile(makefile)
+	if err != nil {
+		t.Error(err)
+	}
+	rows = readWithScanner(bufio.NewScanner(bytes.NewReader(b)))
+	t.Logf("rows from scanner %d\n", rows)
+	rows = readSimple(b)
+	t.Logf("rows from simple %d\n", rows)
+	file, err := os.Open(makefile)
+	if err != nil {
+		t.Error(err)
+	}
+	fileInfo, err = file.Stat()
+	if err != nil {
+		t.Error(err)
+	}
+	buff := make([]byte, 1024*16)
+	n, err = io.ReadFull(file, buff)
+	if err != io.ErrUnexpectedEOF && err != nil {
+		file.Close()
+		t.Error(err)
+	}
+	file.Close()
+	buff = buff[:n]
+	rows = readSimple(buff)
+	t.Logf("rows read from cusom %d", rows)
+	t.Logf("size of bytes %d, fileinfo says %d, error is %v", len(buff), fileInfo.Size(), err)
+
+	b, err = readFile(checkMakefile)
+	if err != nil {
+		t.Error(err)
+	}
+	rows = readWithScanner(bufio.NewScanner(bytes.NewReader(b)))
+	t.Logf("rows from scanner %d\n", rows)
+	rows = readSimple(b)
+	t.Logf("rows from simple %d\n", rows)
+	file, err = os.Open(checkMakefile)
+	if err != nil {
+		t.Error(err)
+	}
+	fileInfo, err = file.Stat()
+	if err != nil {
+		t.Error(err)
+	}
+	buff = make([]byte, fileInfo.Size())
+	n, err = io.ReadFull(file, buff)
+	if err != nil {
+		file.Close()
+		t.Error(err)
+	}
+	file.Close()
+	buff = buff[:n]
+
+	rows = readSimple(buff)
+	t.Logf("rows read from cusom %d", rows)
+	t.Logf("size of bytes %d, fileinfo says %d, error is %v", len(buff), fileInfo.Size(), err)
+}
+
+func readFile(fileName string) (b []byte, err error) {
+	var file *os.File
+	file, err = os.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	b, err = io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+
+}
+
+func readWithScanner(s *bufio.Scanner) (rows int) {
+	for more := s.Scan(); more; more = s.Scan() {
+		s.Bytes()
+		rows++
+	}
+	return rows
+}
+
+func readSimple(buff []byte) (rows int) {
+	const stop = '\n'
+	var start int
+	for i := 0; i < len(buff); i++ {
+		if buff[i] == stop {
+			rows++
+			//fmt.Println(string(buff[start:i]))
+			start = i
+		}
+	}
+	if start < len(buff)-1 {
+		//fmt.Println(string(buff[start:]))
+		rows++
+	}
+	return rows
 }

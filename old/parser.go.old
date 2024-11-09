@@ -1,0 +1,180 @@
+package parsemake
+
+import (
+	"bytes"
+	"errors"
+	"github.com/valyala/bytebufferpool"
+	"io"
+	"unicode/utf8"
+)
+
+const (
+	defaultBuffSize       = 1024 * 4
+	commentPrefix         = rune('#')
+	specialVariablePrefix = rune('.')
+	endOfLine             = rune('\n')
+	continueLine          = rune('\\')
+)
+
+type Parser struct {
+	bytebufferpool.ByteBuffer
+	r       io.Reader
+	maxRead int
+	read    int
+	line    int
+	br      bytes.Reader
+}
+
+func New(r io.Reader) *Parser {
+	return NewSize(r, defaultBuffSize)
+}
+
+func NewSize(r io.Reader, size int) *Parser {
+	if size <= utf8.UTFMax*16 {
+		size = defaultBuffSize
+	}
+	return &Parser{
+		ByteBuffer: bytebufferpool.ByteBuffer{B: make([]byte, size)},
+		maxRead:    size - utf8.UTFMax - 1, // extra one for readrune to never return io.EOF
+		r:          r,
+		read:       0,
+		line:       0,
+	}
+}
+
+/*
+Reset resets the parser for reuse and allocates a new underlying []byte
+*/
+func (p *Parser) Reset(r io.Reader) {
+	p.B = make([]byte, len(p.B))
+	p.ResetDirty(r)
+}
+
+/*
+ResetDirty resets the parser for reuse.
+Prefer to use Reset() instead
+WARNING: any makefile already parsed will now be dirty and cannot be used.
+*/
+func (p *Parser) ResetDirty(r io.Reader) {
+	p.r = r
+	p.read = 0
+	p.line = 0
+	p.ByteBuffer.Reset()
+}
+
+func (p *Parser) Parse() (res Makefile, err error) {
+	// make sure enough space
+	if cap(p.B) == 0 {
+		p.B = make([]byte, defaultBuffSize)
+	}
+	p.B = p.B[:cap(p.B)]
+
+	for {
+		// this will most likelly only parse one time.
+		err = p.readBatch()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return res, err
+		}
+		err = p.parseBatch(&res)
+		if err != nil {
+			return res, err
+		}
+	}
+	err = p.parseBatch(&res)
+	if err != nil {
+		return res, err
+	}
+
+	return res, nil
+}
+
+func (p *Parser) parseBatch(m *Makefile) (err error) {
+	var c rune
+	for {
+		p.line++
+
+		c, err = p.ReadBufferedRune()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return
+		}
+		switch c {
+		case commentPrefix:
+			err = p.readComment()
+		case specialVariablePrefix:
+			err = p.readSpecialVariable(m)
+		default:
+			err = p.readLine(m)
+		}
+		if err != nil {
+			return
+		}
+	}
+	p.maxRead = len(p.B)
+	// handle line
+	return nil
+}
+
+func (p *Parser) readBatch() (err error) {
+	var (
+		n, nn int
+	)
+	if p.read > 0 {
+		n = copy(p.B, p.B[p.read:p.Len()])
+	}
+	p.read = n
+	buf := p.B[p.read:]
+	n = 0
+	toRead := len(buf)
+	for n < toRead && err == nil {
+		nn, err = p.r.Read(buf[n:])
+		n += nn
+	}
+	p.read += n
+	p.br.Reset(p.B)
+	return
+}
+
+func (p *Parser) readComment() (err error) {
+	var ch rune
+	for {
+		ch, err = p.ReadBufferedRune()
+		if err != nil {
+			return
+		}
+		switch ch {
+		case endOfLine:
+			return nil
+		}
+	}
+}
+
+func (p *Parser) readSpecialVariable(m *Makefile) error {
+	return errors.ErrUnsupported
+}
+
+func (p *Parser) readLine(m *Makefile) (err error) {
+	return errors.ErrUnsupported
+}
+
+func (p *Parser) ReadBufferedRune() (ch rune, err error) {
+	var size int
+	if p.read >= p.maxRead {
+		err = p.readBatch()
+		if err != nil {
+			return ch, err
+		}
+	}
+	ch, size, err = p.br.ReadRune()
+	p.read += size
+	if err != nil {
+		return ch, err
+	}
+
+	return ch, nil
+}
