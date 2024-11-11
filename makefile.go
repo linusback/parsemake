@@ -12,7 +12,6 @@ import (
 
 // Makefile and it's corresponded parts matches signature of checkmake/parser
 type Makefile struct {
-	FileName  string
 	Rules     RuleList
 	Variables VariableList
 }
@@ -64,7 +63,6 @@ func ParseLog(filepath string, logLvl slog.Level) (ret *Makefile, err error) {
 	)
 	slog.SetLogLoggerLevel(logLvl)
 	ret = new(Makefile)
-	ret.FileName = filepath
 	scanner, err = NewMakefileScanner(filepath)
 	if err != nil {
 		return ret, err

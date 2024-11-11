@@ -2,7 +2,7 @@ ENTRYPOINT_NAME=main
 BINARY_NAME=parsemake
 
 SHELL=/usr/bin/env bash
-
+MSG="Hello linus"
 
 all: test build
 
@@ -17,6 +17,9 @@ bench:
 	go test ./... -bench=. -benchtime 3s -run=^\# -cpu=1,20
 
 echo:
+	echo $(MSG)
+
+echo-multi:
 	echo """hello\
 	my vr\
 	"""

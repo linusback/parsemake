@@ -5,4 +5,4 @@ The project might never be completely finished or compliant with the makefile sp
 
 Heavily inspired from https://github.com/mrtazz/checkmake
 
-WARNING this is an unfinished project use at your own risk.
+WARNING this is an unfinished project it does not currently work use at your own risk.

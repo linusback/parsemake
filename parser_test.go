@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -198,6 +199,26 @@ func customBenchmarkInclude(fileName string, byteSize int64) func(*testing.B) {
 			readSimple(buff)
 		}
 	}
+}
+
+func Test_Parser_readFile(t *testing.T) {
+	p := NewParser()
+	r := strings.NewReader("hellohellohello")
+	n, err := p.readFile(r, len("hellohellohello"))
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("total bytes read %d, size of data %d\n", n, len(p.data))
+	t.Logf("val: %s", p.data)
+
+	p = NewParser()
+	r = strings.NewReader("hellohellohello")
+	n, err = p.readFile(r, len("hellohellohello")*30)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Logf("total bytes read %d, size of data %d\n", n, len(p.data))
+	t.Logf("val: %s", p.data)
 }
 
 func Test_Parser_New(t *testing.T) {
