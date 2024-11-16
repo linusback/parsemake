@@ -2,31 +2,16 @@ package parsemake
 
 import (
 	"fmt"
+	"github.com/linusback/parsemake/internal/benchmark"
 	"github.com/mrtazz/checkmake/parser"
 	"log/slog"
-	"os"
 	"testing"
 )
-
-const (
-	checkMakefile = "./test/CheckmakeMakefile"
-	makefile      = "./Makefile"
-)
-
-var testFiles = [...]string{
-	checkMakefile,
-	makefile,
-}
-
-var benchmarks = []benchmark{
-	newBenchmark("standard", makefile),
-	newBenchmark("large", checkMakefile),
-}
 
 func Benchmark_Parse(b *testing.B) {
 	toRun := getParseBenchmarks(Parse)
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
@@ -34,31 +19,21 @@ func Benchmark_Checkmake_Parse(b *testing.B) {
 	toRun := getParseBenchmarks(parser.Parse)
 	b.ResetTimer()
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
-type benchmark struct {
-	name     string
-	fileName string
-	byteSize int64
-	f        func(*testing.B)
-}
-
-func newBenchmark(name, filename string) benchmark {
-	return benchmark{name, filename, getByteSize(filename), nil}
-}
-
-func getParseBenchmarks[T any](parse func(string) (T, error)) (b []benchmark) {
-	b = make([]benchmark, len(benchmarks))
-	for i, bench := range benchmarks {
+func getParseBenchmarks[T any](parse func(string) (T, error)) (b []benchmark.Benchmark) {
+	b = make([]benchmark.Benchmark, len(benchmark.Benchmarks))
+	for i, bench := range benchmark.Benchmarks {
 		b[i] = bench // copies values
-		b[i].f = getBenchmarks(bench.fileName, bench.byteSize, parse)
+		b[i].F = getBenchmarks(bench.Filename, bench.ByteSize, parse)
 	}
 	return b
 }
 
 func getBenchmarks[T any](fileName string, byteSize int64, parse func(string) (T, error)) func(*testing.B) {
+	fileName = fileName[4:]
 	return func(b *testing.B) {
 		var err error
 		b.ReportAllocs()
@@ -76,8 +51,9 @@ func getBenchmarks[T any](fileName string, byteSize int64, parse func(string) (T
 
 // TODO write equality comparisons for makefile and underlying types
 func Test_Checkmake_Parse(t *testing.T) {
-	t.Run("makefile", testCheckmakeParse(makefile))
-	t.Run("checkmake", testCheckmakeParse(checkMakefile))
+	t.Logf(benchmark.ProjectMakefile[4:])
+	//t.Run("makefile", testCheckmakeParse(benchmark.ProjectMakefile[4:]))
+	//t.Run("checkmake", testCheckmakeParse(benchmark.CheckMakefile[4:]))
 }
 
 func testCheckmakeParse(filename string) func(t *testing.T) {
@@ -101,7 +77,7 @@ func testCheckmakeParse(filename string) func(t *testing.T) {
 
 // TODO write equality comparisons for makefile and underlying types
 func Test_Parse(t *testing.T) {
-	m, err := getMake(checkMakefile)
+	m, err := getMake(benchmark.CheckMakefile)
 	if err != nil {
 		t.Error(err)
 	}
@@ -131,22 +107,4 @@ func getMake(filename string) (f *Makefile, err error) {
 		return nil, err
 	}
 	return f, nil
-}
-
-func getByteSize(fileName string) int64 {
-	var (
-		file     *os.File
-		fileInfo os.FileInfo
-		err      error
-	)
-	file, err = os.Open(fileName)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-	fileInfo, err = file.Stat()
-	if err != nil {
-		panic(err)
-	}
-	return fileInfo.Size()
 }

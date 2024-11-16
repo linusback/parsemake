@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/linusback/parsemake/pkg/stringx"
 	"log/slog"
 	"os"
 	"regexp"
@@ -18,9 +19,9 @@ type Makefile struct {
 
 type Rule struct {
 	LineNumber    int
-	Target        StringNoAlloc
-	Dependencies  []StringNoAlloc
-	Body          []StringNoAlloc
+	Target        stringx.StringNoAlloc
+	Dependencies  []stringx.StringNoAlloc
+	Body          []stringx.StringNoAlloc
 	UsedVariables []Variable
 }
 
@@ -30,8 +31,8 @@ type Variable struct {
 	LineNumber      int
 	SimplyExpanded  bool
 	SpecialVariable bool
-	Name            StringNoAlloc
-	Assignment      StringNoAlloc
+	Name            stringx.StringNoAlloc
+	Assignment      stringx.StringNoAlloc
 }
 
 type VariableList []Variable
@@ -146,7 +147,7 @@ func (s *MakefileScanner) parseRuleOrVariable(line []byte) (ret any, err error) 
 		beginLineNumber := s.LineNumber - 1
 		s.Scan()
 		bodyMatches := reFindRuleBody.FindSubmatch(s.Bytes())
-		ruleBody := make(ArrStringNoAlloc, 0, 20)
+		ruleBody := make(stringx.ArrStringNoAlloc, 0, 20)
 		for bodyMatches != nil {
 			ruleBody = append(ruleBody, bytes.TrimSpace(bodyMatches[1]))
 
@@ -156,8 +157,8 @@ func (s *MakefileScanner) parseRuleOrVariable(line []byte) (ret any, err error) 
 			bodyMatches = reFindRuleBody.FindSubmatch(s.Bytes())
 		}
 		// trim whitespace from all dependencies
-		deps := bytes.Split(matches[2], spaceAsBytes)
-		filteredDeps := make(ArrStringNoAlloc, 0, cap(deps))
+		deps := bytes.Split(matches[2], []byte(" "))
+		filteredDeps := make(stringx.ArrStringNoAlloc, 0, cap(deps))
 
 		for idx := range deps {
 			item := bytes.TrimSpace(deps[idx])

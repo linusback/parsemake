@@ -1,11 +1,13 @@
-package parsemake
+package reader
 
 import (
 	"bufio"
 	"bytes"
+	"errors"
+	"github.com/linusback/parsemake/internal/benchmark"
 	"io"
+	"io/fs"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -13,7 +15,7 @@ func Benchmark_Read_Scanner(b *testing.B) {
 	toRun := createParserBenchmarks(scannerBenchmark)
 	b.ResetTimer()
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
@@ -21,7 +23,7 @@ func Benchmark_Read_Simple(b *testing.B) {
 	toRun := createParserBenchmarks(simpleBenchmark)
 	b.ResetTimer()
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
@@ -29,7 +31,7 @@ func Benchmark_Read_Custom(b *testing.B) {
 	toRun := createParserBenchmarks(customBenchmark)
 	b.ResetTimer()
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
@@ -37,7 +39,7 @@ func Benchmark_Read_Include_Scanner(b *testing.B) {
 	toRun := createParserBenchmarks(scannerBenchmarkInclude)
 	b.ResetTimer()
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
@@ -45,7 +47,7 @@ func Benchmark_Read_Include_Simple(b *testing.B) {
 	toRun := createParserBenchmarks(simpleBenchmarkInclude)
 	b.ResetTimer()
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
@@ -53,17 +55,63 @@ func Benchmark_Read_Include_Custom(b *testing.B) {
 	toRun := createParserBenchmarks(customBenchmarkInclude)
 	b.ResetTimer()
 	for _, bench := range toRun {
-		b.Run(bench.name, bench.f)
+		b.Run(bench.Name, bench.F)
 	}
 }
 
-func createParserBenchmarks(getBench func(string, int64) func(*testing.B)) (b []benchmark) {
-	b = make([]benchmark, len(benchmarks))
-	for i, bench := range benchmarks {
+func Benchmark_ReadAll(b *testing.B) {
+	toRun := createParserBenchmarks(benchMarkReadAll)
+	b.ResetTimer()
+	for _, bench := range toRun {
+		b.Run(bench.Name, bench.F)
+	}
+}
+
+func Benchmark_ReadFile(b *testing.B) {
+	toRun := createParserBenchmarks(benchMarkReadFile)
+	b.ResetTimer()
+	for _, bench := range toRun {
+		b.Run(bench.Name, bench.F)
+	}
+}
+
+func createParserBenchmarks(getBench func(string, int64) func(*testing.B)) (b []benchmark.Benchmark) {
+	b = make([]benchmark.Benchmark, len(benchmark.Benchmarks))
+	for i, bench := range benchmark.Benchmarks {
 		b[i] = bench // copies values
-		b[i].f = getBench(bench.fileName, bench.byteSize)
+		b[i].F = getBench(bench.Filename, bench.ByteSize)
 	}
 	return b
+}
+
+func benchMarkReadAll(fileName string, byteSize int64) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(byteSize)
+		for i := 0; i < b.N; i++ {
+			r, err := New(fileName)
+			if err != nil {
+				b.Error(err)
+			}
+			err = r.ReadAll()
+			if err != nil {
+				b.Error(err)
+			}
+		}
+	}
+}
+
+func benchMarkReadFile(fileName string, byteSize int64) func(*testing.B) {
+	return func(b *testing.B) {
+		b.ReportAllocs()
+		b.SetBytes(byteSize)
+		for i := 0; i < b.N; i++ {
+			_, err := os.ReadFile(fileName)
+			if err != nil {
+				b.Error(err)
+			}
+		}
+	}
 }
 
 func scannerBenchmark(fileName string, byteSize int64) func(*testing.B) {
@@ -201,24 +249,37 @@ func customBenchmarkInclude(fileName string, byteSize int64) func(*testing.B) {
 	}
 }
 
-func Test_Parser_readFile(t *testing.T) {
-	p := NewParser()
-	r := strings.NewReader("hellohellohello")
-	n, err := p.readFile(r, len("hellohellohello"))
-	if err != nil {
-		t.Error(err)
-	}
-	t.Logf("total bytes read %d, size of data %d\n", n, len(p.data))
-	t.Logf("val: %s", p.data)
+func Test_Parser_ReadMore(t *testing.T) {
+	for _, filename := range benchmark.TestFiles {
+		r, err := New(filename)
+		if err != nil {
+			t.Error(err)
+		}
+		err = r.ReadAll()
+		if err != nil {
+			t.Error(err)
+		}
+		t.Logf("reader: %#v", *r)
+		err = r.file.Close()
+		if !errors.Is(err, fs.ErrClosed) {
+			t.Error(err)
+		}
 
-	p = NewParser()
-	r = strings.NewReader("hellohellohello")
-	n, err = p.readFile(r, len("hellohellohello")*30)
-	if err != nil {
-		t.Error(err)
+		err = r.Reset(filename)
+		if err != nil {
+			t.Error(err)
+		}
+		err = r.ReadAll()
+		if err != nil {
+			t.Error(err)
+		}
+		t.Logf("reader: %#v", *r)
+		err = r.file.Close()
+		if !errors.Is(err, fs.ErrClosed) {
+			t.Error(err)
+		}
 	}
-	t.Logf("total bytes read %d, size of data %d\n", n, len(p.data))
-	t.Logf("val: %s", p.data)
+
 }
 
 func Test_Parser_New(t *testing.T) {
@@ -229,7 +290,7 @@ func Test_Parser_New(t *testing.T) {
 		n        int
 		fileInfo os.FileInfo
 	)
-	b, err = readFile(makefile)
+	b, err = readFile(benchmark.ProjectMakefile)
 	if err != nil {
 		t.Error(err)
 	}
@@ -237,7 +298,7 @@ func Test_Parser_New(t *testing.T) {
 	t.Logf("rows from scanner %d\n", rows)
 	rows = readSimple(b)
 	t.Logf("rows from simple %d\n", rows)
-	file, err := os.Open(makefile)
+	file, err := os.Open(benchmark.ProjectMakefile)
 	if err != nil {
 		t.Error(err)
 	}
@@ -257,7 +318,7 @@ func Test_Parser_New(t *testing.T) {
 	t.Logf("rows read from cusom %d", rows)
 	t.Logf("size of bytes %d, fileinfo says %d, error is %v", len(buff), fileInfo.Size(), err)
 
-	b, err = readFile(checkMakefile)
+	b, err = readFile(benchmark.CheckMakefile)
 	if err != nil {
 		t.Error(err)
 	}
@@ -265,7 +326,7 @@ func Test_Parser_New(t *testing.T) {
 	t.Logf("rows from scanner %d\n", rows)
 	rows = readSimple(b)
 	t.Logf("rows from simple %d\n", rows)
-	file, err = os.Open(checkMakefile)
+	file, err = os.Open(benchmark.CheckMakefile)
 	if err != nil {
 		t.Error(err)
 	}

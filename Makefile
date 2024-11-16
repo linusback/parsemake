@@ -6,7 +6,8 @@ SHELL=/usr/bin/env bash
 
 .MSG = "good night"
 
-BENCH=
+BENCH =
+CPU   = 1,20
 
 all: tests build
 
@@ -21,7 +22,7 @@ tests:
 	go test ./...
 
 bench:
-	go test ./... -bench=. -benchtime 3s -run=^\# -cpu=1,20
+	go test ./... -bench=. -benchtime 3s -run=^\# -cpu=$(CPU)
 
 bench-prof:
 	go test . -bench=${BENCH} -benchtime 3s -run=^\# -cpu=20 -cpuprofile ./tmp/$(subst /,-,$(BENCH))_cpu.prof -memprofile ./tmp/$(subst /,-,$(BENCH))_mem.prof -o ./tmp/$(subst /,-,$(BENCH)).test

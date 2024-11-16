@@ -1,4 +1,4 @@
-package parsemake
+package stringx
 
 import (
 	"fmt"
