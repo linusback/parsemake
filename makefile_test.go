@@ -76,19 +76,26 @@ func getBenchmarks[T any](fileName string, byteSize int64, parse func(string) (T
 
 // TODO write equality comparisons for makefile and underlying types
 func Test_Checkmake_Parse(t *testing.T) {
-	m, err := getCheckMake(checkMakefile)
-	if err != nil {
-		t.Error(err)
-	}
+	t.Run("makefile", testCheckmakeParse(makefile))
+	t.Run("checkmake", testCheckmakeParse(checkMakefile))
+}
 
-	fmt.Println("")
-	for _, v := range m.Variables {
-		fmt.Printf("variable: %#v\n", v)
-	}
+func testCheckmakeParse(filename string) func(t *testing.T) {
+	return func(t *testing.T) {
+		m, err := getCheckMake(filename)
+		if err != nil {
+			t.Error(err)
+		}
 
-	fmt.Println("rules: ")
-	for _, r := range m.Rules {
-		fmt.Printf("rules: %#v\n", r)
+		fmt.Println("")
+		for _, v := range m.Variables {
+			fmt.Printf("variable: %#v\n", v)
+		}
+
+		fmt.Println("rules: ")
+		for _, r := range m.Rules {
+			fmt.Printf("rules: %#v\n", r)
+		}
 	}
 }
 

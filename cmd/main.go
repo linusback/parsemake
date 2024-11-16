@@ -2,30 +2,88 @@ package main
 
 import (
 	"fmt"
-	"github.com/linusback/parsemake"
+	"github.com/mrtazz/checkmake/parser"
 	"io"
 	"os"
 )
 
 func main() {
-	filename := ""
-	if len(os.Args) > 1 {
-		filename = os.Args[1]
-	}
-	p := parsemake.NewParser()
-	b, err := p.Parse(filename)
+	//err := readFile("./Makefile")
+	err := parseCheckMake("./Makefile")
+
 	if err != nil {
-		os.Stderr.WriteString(fmt.Sprintf("err: %v", err))
-		os.Stderr.Close()
-		os.Exit(1)
-	}
-	_, err = os.Stdout.Write(b)
-	if err != nil {
-		os.Stderr.WriteString(fmt.Sprintf("err writing string to std out: %v", err))
-		os.Stderr.Close()
+		fmt.Println("err: ", err)
 		os.Exit(1)
 	}
 	os.Exit(0)
+	return
+	//filename := ""
+	//if len(os.Args) > 1 {
+	//	filename = os.Args[1]
+	//}
+	//p := parsemake.NewParser()
+	//b, err := p.Parse(filename)
+	//if err != nil {
+	//	os.Stderr.WriteString(fmt.Sprintf("err: %v", err))
+	//	os.Stderr.Close()
+	//	os.Exit(1)
+	//}
+	//_, err = os.Stdout.Write(b)
+	//if err != nil {
+	//	os.Stderr.WriteString(fmt.Sprintf("err writing string to std out: %v", err))
+	//	os.Stderr.Close()
+	//	os.Exit(1)
+	//}
+	//os.Exit(0)
+}
+
+func parseCheckMake(filename string) error {
+	m, err := parser.Parse(filename)
+	if err != nil {
+		return err
+	}
+	fmt.Println(len(m.Rules) + len(m.Variables))
+	return nil
+}
+
+func readFile(filename string) error {
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	buff := make([]byte, fileInfo.Size())
+	n, err := io.ReadFull(file, buff)
+	if err != nil {
+		return err
+	}
+	if n != len(buff) {
+		return fmt.Errorf("values of n and len(buff) are different %d != %d", n, buff)
+	}
+	rows := readSimple(buff)
+	fmt.Println(rows)
+	return nil
+}
+
+func readSimple(buff []byte) (rows int) {
+	const stop = '\n'
+	var start int
+	for i := 0; i < len(buff); i++ {
+		if buff[i] == stop {
+			rows++
+			//fmt.Println(string(buff[start:i]))
+			start = i
+		}
+	}
+	if start < len(buff)-1 {
+		//fmt.Println(string(buff[start:]))
+		rows++
+	}
+	return rows
 }
 
 func test() error {

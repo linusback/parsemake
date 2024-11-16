@@ -17,20 +17,21 @@ type Makefile struct {
 }
 
 type Rule struct {
-	Target       StringNoAlloc
-	Dependencies []StringNoAlloc
-	Body         []StringNoAlloc
-	LineNumber   int
+	LineNumber    int
+	Target        StringNoAlloc
+	Dependencies  []StringNoAlloc
+	Body          []StringNoAlloc
+	UsedVariables []Variable
 }
 
 type RuleList []Rule
 
 type Variable struct {
-	Name            StringNoAlloc
-	SimplyExpanded  bool
-	Assignment      StringNoAlloc
-	SpecialVariable bool
 	LineNumber      int
+	SimplyExpanded  bool
+	SpecialVariable bool
+	Name            StringNoAlloc
+	Assignment      StringNoAlloc
 }
 
 type VariableList []Variable
@@ -39,11 +40,11 @@ type VariableList []Variable
 
 var (
 	ErrParse                    = errors.New("parse error")
-	reFindRule                  = regexp.MustCompile("^([a-zA-Z]+):(.*)")
+	reFindRule                  = regexp.MustCompile("^([a-zA-Z-_]+):(.*)")
 	reFindRuleBody              = regexp.MustCompile("^\t+(.*)")
+	reFindSpecialVariable       = regexp.MustCompile("^\\.([a-zA-Z_]+):(.*)")
 	reFindSimpleVariable        = regexp.MustCompile("^([a-zA-Z]+) ?:=(.*)")
 	reFindExpandedVariable      = regexp.MustCompile("^([a-zA-Z]+) ?=(.*)")
-	reFindSpecialVariable       = regexp.MustCompile("^\\.([a-zA-Z_]+):(.*)")
 	prefixComment          byte = '#'
 	prefixSpecial          byte = '.'
 )
